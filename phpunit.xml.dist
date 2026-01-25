@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/12.2/phpunit.xsd"
+         colors="true"
+         stderr="true"
+         cacheDirectory=".phpunit.cache">
+  <testsuites>
+    <testsuite name="Tus">
+      <directory>./tests/Unit/Tus</directory>
+    </testsuite>
+  </testsuites>
+  <php>
+    <ini name="memory_limit" value="2048M"/>
+    <ini name="opcache.enable" value="0"/>
+    <ini name="opcache.enable_cli" value="0"/>
+  </php>
+  <source>
+    <include>
+      <directory>./src</directory>
+    </include>
+  </source>
+</phpunit>
