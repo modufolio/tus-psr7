@@ -16,7 +16,7 @@ composer require modufolio/tus-psr7
 ## Usage
 
 ```php
-use Modufolio\Tus\Tus\TusServer;
+use Modufolio\Tus\TusServer;
 
 $uploadDir = '/path/to/uploads';
 $maxSize = 1024 * 1024 * 100; // 100MB

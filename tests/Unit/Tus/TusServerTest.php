@@ -4,33 +4,15 @@ declare(strict_types=1);
 
 namespace Modufolio\Tus\Tests\Unit\Tus;
 
-use Modufolio\Tus\Tus\StorageInterface;
-use Modufolio\Tus\Tus\TusServer;
-use PHPUnit\Framework\TestCase;
-use Psr\Http\Message\ServerRequestInterface;
-use Psr\Http\Message\UriInterface;
+use Modufolio\Tus\FilesystemStorage;
+use Modufolio\Tus\StorageInterface;
+use Modufolio\Tus\TusServer;
 
-class TusServerTest extends TestCase
+class TusServerTest extends TusTestCase
 {
-    private string $tempDir;
-
-    protected function setUp(): void
-    {
-        $this->tempDir = sys_get_temp_dir() . '/tus_test_' . uniqid();
-        mkdir($this->tempDir, 0777, true);
-    }
-
-    protected function tearDown(): void
-    {
-        if (is_dir($this->tempDir)) {
-            array_map('unlink', glob($this->tempDir . '/*'));
-            rmdir($this->tempDir);
-        }
-    }
-
     public function testConstructorCreatesServer(): void
     {
-        $server = new TusServer($this->tempDir, 10485760, 5242880);
+        $server = new TusServer($this->tmpDir, 10485760, 5242880);
 
         $this->assertInstanceOf(TusServer::class, $server);
     }
@@ -42,20 +24,18 @@ class TusServerTest extends TestCase
 
     public function testSetAndGetStorageBackend(): void
     {
-        $server = new TusServer($this->tempDir);
-        $storage = $this->createMock(StorageInterface::class);
+        $storage = new FilesystemStorage($this->tmpDir);
 
-        $server->setStorageBackend($storage);
+        $this->server->setStorageBackend($storage);
 
-        $this->assertSame($storage, $server->getStorageBackend());
+        $this->assertSame($storage, $this->server->getStorageBackend());
     }
 
     public function testSetAllowedMimeTypes(): void
     {
-        $server = new TusServer($this->tempDir);
-        $result = $server->setAllowedMimeTypes(['image/jpeg', 'image/png']);
+        $result = $this->server->setAllowedMimeTypes(['image/jpeg', 'image/png']);
 
-        $this->assertSame($server, $result);
+        $this->assertSame($this->server, $result);
     }
 
     public function testCalculateMaxSize(): void
@@ -85,14 +65,13 @@ class TusServerTest extends TestCase
 
     public function testCleanTmpDir(): void
     {
-        // Create old test files
-        $oldFile = $this->tempDir . '/old.cachecontainer';
+        $oldFile = $this->tmpDir . '/old.cachecontainer';
         touch($oldFile, time() - 86500); // older than 1 day
 
-        $recentFile = $this->tempDir . '/recent.cachecontainer';
+        $recentFile = $this->tmpDir . '/recent.cachecontainer';
         touch($recentFile);
 
-        TusServer::cleanTmpDir($this->tempDir);
+        TusServer::cleanTmpDir($this->tmpDir);
 
         $this->assertFileDoesNotExist($oldFile);
         $this->assertFileExists($recentFile);
@@ -106,30 +85,11 @@ class TusServerTest extends TestCase
         $this->assertNull(TusServer::mimeToExtension('unknown/mime'));
     }
 
-    private function createMockRequest(
-        string $method = 'OPTIONS',
-        string $path = '/tus/test.txt',
-        array $headers = []
-    ): ServerRequestInterface {
-        $uri = $this->createMock(UriInterface::class);
-        $uri->method('getPath')->willReturn($path);
-
-        $request = $this->createMock(ServerRequestInterface::class);
-        $request->method('getMethod')->willReturn($method);
-        $request->method('getUri')->willReturn($uri);
-        $request->method('getHeaderLine')->willReturnCallback(
-            fn($name) => $headers[$name] ?? ''
-        );
-
-        return $request;
-    }
-
     public function testHandleOptionsRequest(): void
     {
-        $server = new TusServer($this->tempDir);
-        $request = $this->createMockRequest('OPTIONS');
+        $request = $this->makeRequest('OPTIONS', '/tus/test.txt');
 
-        $response = $server->handleRequest($request);
+        $response = $this->server->handleRequest($request);
 
         $this->assertSame(204, $response->getStatusCode());
         $this->assertStringContainsString(TusServer::PROTOCOL_VERSION, $response->getHeaderLine('Tus-Resumable'));
@@ -137,20 +97,18 @@ class TusServerTest extends TestCase
 
     public function testHandleRequestWithUnsupportedMethod(): void
     {
-        $server = new TusServer($this->tempDir);
-        $request = $this->createMockRequest('GET');
+        $request = $this->makeRequest('GET', '/tus/test.txt');
 
-        $response = $server->handleRequest($request);
+        $response = $this->server->handleRequest($request);
 
         $this->assertSame(405, $response->getStatusCode());
     }
 
     public function testHandleRequestWithUnsupportedProtocolVersion(): void
     {
-        $server = new TusServer($this->tempDir);
-        $request = $this->createMockRequest('OPTIONS', '/tus/test', ['Tus-Resumable' => '0.9.0']);
+        $request = $this->makeRequest('OPTIONS', '/tus/test', ['Tus-Resumable' => '0.9.0']);
 
-        $response = $server->handleRequest($request);
+        $response = $this->server->handleRequest($request);
 
         $this->assertSame(412, $response->getStatusCode());
     }
@@ -163,10 +121,9 @@ class TusServerTest extends TestCase
             ->with('test.txt')
             ->willReturn(true);
 
-        $server = new TusServer($this->tempDir);
-        $server->setStorageBackend($storage);
+        $this->server->setStorageBackend($storage);
 
-        $result = $server->complete('test.txt');
+        $result = $this->server->complete('test.txt');
 
         $this->assertTrue($result);
     }
@@ -179,10 +136,9 @@ class TusServerTest extends TestCase
             ->with('test.txt', '/destination', true)
             ->willReturn(true);
 
-        $server = new TusServer($this->tempDir);
-        $server->setStorageBackend($storage);
+        $this->server->setStorageBackend($storage);
 
-        $result = $server->completeAndFetch('test.txt', '/destination', true);
+        $result = $this->server->completeAndFetch('test.txt', '/destination', true);
 
         $this->assertTrue($result);
     }
@@ -195,10 +151,9 @@ class TusServerTest extends TestCase
             ->with('test.txt', false)
             ->willReturn(null);
 
-        $server = new TusServer($this->tempDir);
-        $server->setStorageBackend($storage);
+        $this->server->setStorageBackend($storage);
 
-        $server->completeAndStream('test.txt', false);
+        $this->server->completeAndStream('test.txt', false);
     }
 
     public function testToBytesHandlesEdgeCases(): void
@@ -210,7 +165,7 @@ class TusServerTest extends TestCase
 
     public function testConstructorWithDefaultParameters(): void
     {
-        $server = new TusServer($this->tempDir);
+        $server = new TusServer($this->tmpDir);
 
         $this->assertInstanceOf(TusServer::class, $server);
         $this->assertInstanceOf(StorageInterface::class, $server->getStorageBackend());
@@ -218,7 +173,7 @@ class TusServerTest extends TestCase
 
     public function testConstructorWithCustomMaxSize(): void
     {
-        $server = new TusServer($this->tempDir, 50000000);
+        $server = new TusServer($this->tmpDir, 50000000);
 
         $this->assertInstanceOf(TusServer::class, $server);
     }

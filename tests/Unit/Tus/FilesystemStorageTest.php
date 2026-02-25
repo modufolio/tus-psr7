@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Modufolio\Tus\Tests\Unit\Tus;
 
 class FilesystemStorageTest extends TusTestCase

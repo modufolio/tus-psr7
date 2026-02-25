@@ -1,6 +1,8 @@
 <?php
 
-namespace Modufolio\Tus\Tus;
+declare(strict_types=1);
+
+namespace Modufolio\Tus;
 
 interface StorageInterface
 {

@@ -4,3 +4,4 @@ composer.lock
 .idea/
 *.log
 .phpunit.cache/test-results
+.php-cs-fixer.cache
