@@ -246,7 +246,7 @@ class TusServer
             'Tus-Resumable' => self::PROTOCOL_VERSION,
             'Upload-Offset' => (string)$this->backend->getSize($fileName),
             'Upload-Length' => $cache->length !== null ? (string)$cache->length : '',
-            'Upload-Metadata' => $this->formatMetadata($cache->metadata ?? []),
+            'Upload-Metadata' => $this->formatMetadata((array)($cache->metadata ?? [])),
             'Cache-Control' => 'no-store',
         ];
 
