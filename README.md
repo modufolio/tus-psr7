@@ -1,5 +1,7 @@
 # TUS PSR-7
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen.svg?style=flat-square)](https://opensource.org/licenses/MIT) [![codecov](https://img.shields.io/codecov/c/github/modufolio/tus-psr7?token=9DXHJW2AD6&style=flat-square)](https://codecov.io/gh/modufolio/tus-psr7)
+
 A PHP implementation of the [TUS resumable upload protocol](https://tus.io/).
 
 ## Installation
