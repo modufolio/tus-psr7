@@ -8,7 +8,7 @@ use Modufolio\Tus\Exception\TusException;
 
 class FilesystemStorage implements StorageInterface
 {
-    private static string $containerSuffix = '.cachecontainer';
+    private string $containerSuffix = '.cachecontainer';
     private string $uploadDir;
     private string $lockSuffix = '.lock';
     private int $tmpTtl = 86400; // seconds
@@ -16,7 +16,7 @@ class FilesystemStorage implements StorageInterface
     public function __construct(string $uploadDir, ?string $containerSuffix = null)
     {
         if ($containerSuffix !== null) {
-            self::$containerSuffix = $containerSuffix;
+            $this->containerSuffix = $containerSuffix;
         }
         $this->setUploadDir($uploadDir);
     }
@@ -110,8 +110,12 @@ class FilesystemStorage implements StorageInterface
             return 0;
         }
         clearstatcache(true, $filePath);
+        $size = filesize($filePath);
+        if ($size === false) {
+            throw new TusException("Cannot read file size: {$filename}");
+        }
 
-        return (int)filesize($filePath);
+        return $size;
     }
 
     public function delete(string $filename): void
@@ -128,20 +132,27 @@ class FilesystemStorage implements StorageInterface
         }, 'c');
     }
 
-    public function containerCreate(string $filename, \stdClass $cache): void
+    public function containerCreate(string $filename, UploadCache $cache): void
     {
         $this->assertSafeFilename($filename);
-        $infoFile = $this->uploadDir . $filename . self::$containerSuffix;
+        $infoFile = $this->uploadDir . $filename . $this->containerSuffix;
         $pathToLock = file_exists($this->uploadDir . $filename) ? $this->uploadDir . $filename : $infoFile;
-
-        $existing = $this->containerFetch($filename);
-        if ($existing) {
-            $cache = (object)array_merge((array)$existing, (array)$cache);
-        }
-
         $tmp = $infoFile . '.tmp';
-        $json = json_encode($cache, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-        $this->lock($pathToLock, LOCK_EX, function ($fh) use ($tmp, $infoFile, $json, $filename) {
+
+        // Read-merge-write inside a single lock so two concurrent creates
+        // cannot overwrite each other's data.
+        $this->lock($pathToLock, LOCK_EX, function ($fh) use ($infoFile, $tmp, $filename, $cache) {
+            $incoming = json_decode(json_encode($cache), true);
+            if (file_exists($infoFile)) {
+                $contents = @file_get_contents($infoFile);
+                if ($contents !== false && $contents !== '') {
+                    $existing = json_decode($contents, true);
+                    if (is_array($existing)) {
+                        $incoming = array_merge($existing, $incoming);
+                    }
+                }
+            }
+            $json = json_encode(UploadCache::fromArray($incoming), JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
             if (@file_put_contents($tmp, $json) === false || !@rename($tmp, $infoFile)) {
                 @unlink($tmp);
 
@@ -154,13 +165,13 @@ class FilesystemStorage implements StorageInterface
     {
         $this->assertSafeFilename($filename);
 
-        return file_exists($this->uploadDir . $filename . self::$containerSuffix);
+        return file_exists($this->uploadDir . $filename . $this->containerSuffix);
     }
 
-    public function containerFetch(string $filename): ?\stdClass
+    public function containerFetch(string $filename): ?UploadCache
     {
         $this->assertSafeFilename($filename);
-        $infoFile = $this->uploadDir . $filename . self::$containerSuffix;
+        $infoFile = $this->uploadDir . $filename . $this->containerSuffix;
         if (!file_exists($infoFile)) {
             return null;
         }
@@ -170,14 +181,14 @@ class FilesystemStorage implements StorageInterface
             throw new TusException("Failed to read container for: {$filename}");
         }
 
-        $data = json_decode($contents, false);
+        $data = json_decode($contents, true);
         if ($data === null) {
             @unlink($infoFile);
 
             return null;
         }
 
-        if (isset($data->expires_at) && @strtotime($data->expires_at) < time()) {
+        if (isset($data['expires_at']) && @strtotime($data['expires_at']) < time()) {
             try {
                 $this->delete($filename);
             } catch (\Throwable $e) {
@@ -188,13 +199,13 @@ class FilesystemStorage implements StorageInterface
             return null;
         }
 
-        return $data;
+        return UploadCache::fromArray($data);
     }
 
     public function containerDelete(string $filename): void
     {
         $this->assertSafeFilename($filename);
-        $infoFile = $this->uploadDir . $filename . self::$containerSuffix;
+        $infoFile = $this->uploadDir . $filename . $this->containerSuffix;
         if (!file_exists($infoFile)) {
             return;
         }
@@ -245,7 +256,7 @@ class FilesystemStorage implements StorageInterface
         return true;
     }
 
-    public function completeAndStream(string $filename, bool $removeAfter = true)
+    public function completeAndStream(string $filename, bool $removeAfter = true): mixed
     {
         $this->assertSafeFilename($filename);
         $filePath = $this->uploadDir . $filename;
@@ -367,7 +378,7 @@ class FilesystemStorage implements StorageInterface
                 @unlink($f);
                 continue;
             }
-            if (is_file($f) && preg_match('/' . preg_quote(self::$containerSuffix, '/') . '\.tmp$/', $f) && filemtime($f) < time() - $this->tmpTtl) {
+            if (is_file($f) && preg_match('/' . preg_quote($this->containerSuffix, '/') . '\.tmp$/', $f) && filemtime($f) < time() - $this->tmpTtl) {
                 @unlink($f);
             }
         }

@@ -320,6 +320,102 @@ class TusServerHandlerTest extends TusTestCase
     }
 
     /**
+     * Concatenation extension.
+     */
+    public function testFinalizeConcatenationMergesPartials(): void
+    {
+        // Create and fully upload partial 1
+        $meta1 = $this->makeMetadataHeader(['filename' => 'part1.txt']);
+        $this->server->handleRequest($this->makeRequest('POST', '/tus/part1.txt', [
+            'Upload-Length' => '50',
+            'Upload-Concat' => 'partial',
+            'Upload-Metadata' => $meta1,
+        ]));
+        $this->server->handleRequest($this->makeRequest('PATCH', '/tus/part1.txt', [
+            'Upload-Offset' => '0',
+        ], $this->generateContent(50, 'A')));
+
+        // Create and fully upload partial 2
+        $meta2 = $this->makeMetadataHeader(['filename' => 'part2.txt']);
+        $this->server->handleRequest($this->makeRequest('POST', '/tus/part2.txt', [
+            'Upload-Length' => '50',
+            'Upload-Concat' => 'partial',
+            'Upload-Metadata' => $meta2,
+        ]));
+        $this->server->handleRequest($this->makeRequest('PATCH', '/tus/part2.txt', [
+            'Upload-Offset' => '0',
+        ], $this->generateContent(50, 'B')));
+
+        // Create the final concatenated upload (length 0 — just triggers assembly)
+        $metaFinal = $this->makeMetadataHeader(['filename' => 'final.txt']);
+        $this->server->handleRequest($this->makeRequest('POST', '/tus/final.txt', [
+            'Upload-Length' => '0',
+            'Upload-Concat' => 'final; /tus/part1.txt /tus/part2.txt',
+            'Upload-Metadata' => $metaFinal,
+        ]));
+
+        // PATCH with empty body at offset 0 — triggers finalizeConcatenation
+        $response = $this->server->handleRequest($this->makeRequest('PATCH', '/tus/final.txt', [
+            'Upload-Offset' => '0',
+        ], ''));
+
+        $this->assertSame(204, $response->getStatusCode());
+        $finalPath = $this->tmpDir . '/final.txt';
+        $this->assertFileExists($finalPath);
+        $this->assertSame(100, filesize($finalPath));
+        $this->assertSame(str_repeat('A', 50) . str_repeat('B', 50), file_get_contents($finalPath));
+    }
+
+    public function testFinalizeConcatenationThrowsOnMissingPartial(): void
+    {
+        $metaFinal = $this->makeMetadataHeader(['filename' => 'assembled.txt']);
+        $this->server->handleRequest($this->makeRequest('POST', '/tus/assembled.txt', [
+            'Upload-Length' => '0',
+            'Upload-Concat' => 'final; /tus/ghost.txt',
+            'Upload-Metadata' => $metaFinal,
+        ]));
+
+        $this->expectException(\Modufolio\Tus\Exception\TusException::class);
+        $this->expectExceptionMessage('Missing partial during concatenation');
+
+        $this->server->handleRequest($this->makeRequest('PATCH', '/tus/assembled.txt', [
+            'Upload-Offset' => '0',
+        ], ''));
+    }
+
+    public function testHandleHeadReturnsPartialConcatHeader(): void
+    {
+        $metadata = $this->makeMetadataHeader(['filename' => 'slice.txt']);
+        $this->server->handleRequest($this->makeRequest('POST', '/tus/slice.txt', [
+            'Upload-Length' => '100',
+            'Upload-Concat' => 'partial',
+            'Upload-Metadata' => $metadata,
+        ]));
+
+        $response = $this->server->handleRequest($this->makeRequest('HEAD', '/tus/slice.txt'));
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('partial', $response->getHeaderLine('Upload-Concat'));
+    }
+
+    public function testHandleHeadReturnsFinalConcatHeader(): void
+    {
+        $metaFinal = $this->makeMetadataHeader(['filename' => 'merged.txt']);
+        $this->server->handleRequest($this->makeRequest('POST', '/tus/merged.txt', [
+            'Upload-Length' => '0',
+            'Upload-Concat' => 'final; /tus/a.txt /tus/b.txt',
+            'Upload-Metadata' => $metaFinal,
+        ]));
+
+        $response = $this->server->handleRequest($this->makeRequest('HEAD', '/tus/merged.txt'));
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringStartsWith('final;', $response->getHeaderLine('Upload-Concat'));
+        $this->assertStringContainsString('/tus/a.txt', $response->getHeaderLine('Upload-Concat'));
+        $this->assertStringContainsString('/tus/b.txt', $response->getHeaderLine('Upload-Concat'));
+    }
+
+    /**
      * Filename sanitization.
      */
     public function testHandlePostSanitizeFilename(): void

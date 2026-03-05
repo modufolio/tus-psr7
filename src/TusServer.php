@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Modufolio\Tus;
 
 use Modufolio\Psr7\Http\Response;
+use Modufolio\Tus\Checksum;
 use Modufolio\Tus\Exception\TusException;
+use Modufolio\Tus\UploadCache;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -57,7 +59,7 @@ class TusServer
         return $this->backend->completeAndFetch($filename, $destinationDirectory, $removeAfter);
     }
 
-    public function completeAndStream(string $filename, bool $removeAfter = true)
+    public function completeAndStream(string $filename, bool $removeAfter = true): mixed
     {
         return $this->backend->completeAndStream($filename, $removeAfter);
     }
@@ -152,15 +154,16 @@ class TusServer
             return $this->createResponse(409, [], 'File already exists without valid container');
         }
 
-        $cache = new \stdClass();
-        $cache->length = $uploadLength === '' ? null : (int)$uploadLength;
-        $cache->deferred = $deferLength;
-        $cache->metadata = $uploadMetadata;
-        $cache->is_partial = $isPartial;
-        $cache->partials = [];
-        $cache->created_at = gmdate('D, d M Y H:i:s T');
-        $cache->expires_at = gmdate('D, d M Y H:i:s T', time() + 86400);
-        $cache->location = $this->apiPath . '/' . $fileName;
+        $cache = new UploadCache(
+            length: $uploadLength === '' ? null : (int) $uploadLength,
+            deferred: $deferLength,
+            metadata: $uploadMetadata,
+            is_partial: $isPartial,
+            partials: [],
+            created_at: gmdate('D, d M Y H:i:s T'),
+            expires_at: gmdate('D, d M Y H:i:s T', time() + 86400),
+            location: $this->apiPath . '/' . $fileName,
+        );
 
         if ($crossChecksum) {
             if (!in_array($crossChecksum->algorithm, $this->backend->getCrossCheckAlgorithms(), true)) {
@@ -184,7 +187,7 @@ class TusServer
             $this->backend->create($fileName);
             $ctx = null;
 
-            if ($this->extCrossCheck && isset($cache->checksum->algorithm)) {
+            if ($this->extCrossCheck && $cache->checksum !== null) {
                 $ctx = hash_init($cache->checksum->algorithm);
             }
 
@@ -337,7 +340,7 @@ class TusServer
         $newOffset = $this->backend->getSize($fileName);
 
         if ($declaredLength !== null && $newOffset >= $declaredLength && empty($cache->is_partial)) {
-            if ($this->extCrossCheck && isset($cache->checksum->algorithm, $cache->checksum->value)) {
+            if ($this->extCrossCheck && $cache->checksum !== null) {
                 if (!$this->backend->crossCheck($fileName, $cache->checksum->algorithm, $cache->checksum->value)) {
                     $this->backend->delete($fileName);
                     $this->backend->containerDelete($fileName);
@@ -383,7 +386,7 @@ class TusServer
         return $this->createResponse(204, ['Tus-Resumable' => self::PROTOCOL_VERSION, 'Cache-Control' => 'no-store'], '');
     }
 
-    private function finalizeConcatenation(string $fileName, \stdClass $cache): void
+    private function finalizeConcatenation(string $fileName, UploadCache $cache): void
     {
         $partials = array_map(fn($u) => basename(parse_url($u, PHP_URL_PATH)), $cache->partials);
 
@@ -418,7 +421,7 @@ class TusServer
             fclose($fh);
         }
 
-        if ($this->extCrossCheck && isset($cache->checksum->algorithm, $cache->checksum->value)) {
+        if ($this->extCrossCheck && $cache->checksum !== null) {
             if (!$this->backend->crossCheck($fileName, $cache->checksum->algorithm, $cache->checksum->value)) {
                 $this->backend->delete($fileName);
                 $this->backend->containerDelete($fileName);
@@ -430,7 +433,7 @@ class TusServer
         $this->finalizeUpload($fileName, $cache);
     }
 
-    private function finalizeUpload(string $fileName, \stdClass $cache): void
+    private function finalizeUpload(string $fileName, UploadCache $cache): void
     {
         if ($this->validateMimeTypes && !empty($this->allowedMimeTypes)) {
             try {
@@ -446,7 +449,7 @@ class TusServer
         $this->backend->containerDelete($fileName);
     }
 
-    private function parseChecksum(string $value): ?\stdClass
+    private function parseChecksum(string $value): ?Checksum
     {
         if (empty(trim($value))) {
             return null;
@@ -456,7 +459,7 @@ class TusServer
             return null;
         }
 
-        return (object)['algorithm' => $parts[0], 'value' => $parts[1]];
+        return new Checksum($parts[0], $parts[1]);
     }
 
     private function getFileNameFromRequest(ServerRequestInterface $request): string
@@ -539,12 +542,15 @@ class TusServer
 
     public static function cleanTmpDir(string $dir): void
     {
-        foreach (glob(rtrim($dir, '/') . '/*.{cachecontainer,tmp}', GLOB_BRACE) as $file) {
+        $base = rtrim($dir, '/');
+        // Escape glob special characters in the directory path itself.
+        $escaped = str_replace(['[', ']', '*', '?'], ['[[]', '[]]', '[*]', '[?]'], $base);
+        foreach (glob($escaped . '/*.{cachecontainer,tmp}', GLOB_BRACE) as $file) {
             if (is_file($file) && filemtime($file) < time() - 86400) {
                 @unlink($file);
             }
         }
-        foreach (glob(rtrim($dir, '/') . '/*', GLOB_ONLYDIR) as $d) {
+        foreach (glob($escaped . '/*', GLOB_ONLYDIR) as $d) {
             if (is_dir($d) && count(glob("$d/*")) === 0) {
                 @rmdir($d);
             }

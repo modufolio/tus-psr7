@@ -6,6 +6,7 @@ namespace Modufolio\Tus\Tests\Unit\Tus;
 
 use Modufolio\Tus\Exception\TusException;
 use Modufolio\Tus\FilesystemStorage;
+use Modufolio\Tus\UploadCache;
 
 class FilesystemStorageTest extends TusTestCase
 {
@@ -83,7 +84,7 @@ class FilesystemStorageTest extends TusTestCase
         $destDir = $this->tmpDir . 'downloads/';
 
         // Create container metadata
-        $container = (object)['offset' => 1024, 'size' => 1024];
+        $container = UploadCache::fromArray(['offset' => 1024, 'size' => 1024]);
         $this->storage->containerCreate('upload.bin', $container);
         $this->assertTrue($this->storage->containerExists('upload.bin'));
 
@@ -100,7 +101,7 @@ class FilesystemStorageTest extends TusTestCase
         $destDir = $this->tmpDir . 'downloads/';
 
         // Create container metadata
-        $container = (object)['offset' => 1024, 'size' => 1024];
+        $container = UploadCache::fromArray(['offset' => 1024, 'size' => 1024]);
         $this->storage->containerCreate('upload.bin', $container);
         $this->assertTrue($this->storage->containerExists('upload.bin'));
 
@@ -116,7 +117,7 @@ class FilesystemStorageTest extends TusTestCase
         $sourcePath = $this->generateFile(512, 'upload.bin');
 
         // When destination is same as upload dir, just delete container
-        $container = (object)['offset' => 512, 'size' => 512];
+        $container = UploadCache::fromArray(['offset' => 512, 'size' => 512]);
         $this->storage->containerCreate('upload.bin', $container);
         $this->assertTrue($this->storage->containerExists('upload.bin'));
 
@@ -211,7 +212,7 @@ class FilesystemStorageTest extends TusTestCase
         $this->generateFile(512, 'upload.bin');
 
         // Create container metadata
-        $container = (object)['offset' => 512, 'size' => 512];
+        $container = UploadCache::fromArray(['offset' => 512, 'size' => 512]);
         $this->storage->containerCreate('upload.bin', $container);
         $this->assertTrue($this->storage->containerExists('upload.bin'));
 
@@ -226,7 +227,7 @@ class FilesystemStorageTest extends TusTestCase
         $this->generateFile(512, 'upload.bin');
 
         // Create container metadata
-        $container = (object)['offset' => 512, 'size' => 512];
+        $container = UploadCache::fromArray(['offset' => 512, 'size' => 512]);
         $this->storage->containerCreate('upload.bin', $container);
         $this->assertTrue($this->storage->containerExists('upload.bin'));
 
@@ -281,7 +282,7 @@ class FilesystemStorageTest extends TusTestCase
         $sourcePath = $this->generateFile(512, 'upload.bin');
 
         // Create container metadata
-        $container = (object)['offset' => 512, 'size' => 512];
+        $container = UploadCache::fromArray(['offset' => 512, 'size' => 512]);
         $this->storage->containerCreate('upload.bin', $container);
         $this->assertTrue($this->storage->containerExists('upload.bin'));
 
@@ -330,7 +331,7 @@ class FilesystemStorageTest extends TusTestCase
         $sourcePath = $this->generateFile(512, 'upload.bin');
 
         // Container created with different filename, but complete() called with actual file
-        $container = (object)['offset' => 512];
+        $container = UploadCache::fromArray(['offset' => 512]);
         $this->storage->containerCreate('upload.bin', $container);
 
         $result = $this->storage->complete('upload.bin');
