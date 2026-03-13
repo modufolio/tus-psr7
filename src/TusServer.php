@@ -34,6 +34,13 @@ class TusServer
         $this->backend = new FilesystemStorage($uploadDir);
     }
 
+    public function setApiPath(string $apiPath): self
+    {
+        $this->apiPath = rtrim($apiPath, '/');
+
+        return $this;
+    }
+
     public function setAllowedMimeTypes(array $mimeTypes): self
     {
         $this->allowedMimeTypes = $mimeTypes;
