@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace Modufolio\Tus;
 
 use Modufolio\Psr7\Http\Response;
-use Modufolio\Tus\Checksum;
 use Modufolio\Tus\Exception\TusException;
-use Modufolio\Tus\UploadCache;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -162,7 +160,7 @@ class TusServer
         }
 
         $cache = new UploadCache(
-            length: $uploadLength === '' ? null : (int) $uploadLength,
+            length: $uploadLength === '' ? null : (int)$uploadLength,
             deferred: $deferLength,
             metadata: $uploadMetadata,
             is_partial: $isPartial,

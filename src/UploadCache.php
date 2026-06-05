@@ -22,14 +22,14 @@ class UploadCache
     public static function fromArray(array $data): self
     {
         $cache = new self(
-            length: isset($data['length']) ? (int) $data['length'] : null,
-            deferred: (bool) ($data['deferred'] ?? false),
-            metadata: (array) ($data['metadata'] ?? []),
-            is_partial: (bool) ($data['is_partial'] ?? false),
-            partials: (array) ($data['partials'] ?? []),
-            created_at: (string) ($data['created_at'] ?? ''),
-            expires_at: (string) ($data['expires_at'] ?? ''),
-            location: (string) ($data['location'] ?? ''),
+            length: isset($data['length']) ? (int)$data['length'] : null,
+            deferred: (bool)($data['deferred'] ?? false),
+            metadata: (array)($data['metadata'] ?? []),
+            is_partial: (bool)($data['is_partial'] ?? false),
+            partials: (array)($data['partials'] ?? []),
+            created_at: (string)($data['created_at'] ?? ''),
+            expires_at: (string)($data['expires_at'] ?? ''),
+            location: (string)($data['location'] ?? ''),
         );
 
         if (isset($data['checksum']['algorithm'], $data['checksum']['value'])) {
