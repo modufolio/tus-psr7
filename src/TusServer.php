@@ -89,10 +89,6 @@ class TusServer
             return $this->createResponse(412, [], 'Unsupported TUS protocol version');
         }
 
-        if (!isset($this->backend)) {
-            throw new TusException('Storage backend must be set before handling requests');
-        }
-
         $method = strtoupper($request->getMethod());
         if (!in_array($method, ['OPTIONS', 'POST', 'HEAD', 'PATCH', 'DELETE'])) {
             return $this->createResponse(405, ['Allow' => 'OPTIONS, POST, HEAD, PATCH, DELETE'], 'Method not allowed');
@@ -186,7 +182,7 @@ class TusServer
         $this->backend->containerCreate($fileName, $cache);
 
         $body = $request->getBody();
-        $hasBody = $body && $body->getSize() > 0;
+        $hasBody = $body->getSize() > 0;
 
         if ($hasBody) {
             $this->backend->create($fileName);
@@ -216,7 +212,7 @@ class TusServer
 
             if ($ctx !== null) {
                 $localChecksum = base64_encode(hash_final($ctx, true));
-                if ($localChecksum !== ($cache->checksum->value ?? null)) {
+                if ($localChecksum !== $cache->checksum->value) {
                     $this->backend->delete($fileName);
                     $this->backend->containerDelete($fileName);
 
@@ -288,9 +284,6 @@ class TusServer
         }
 
         $body = $request->getBody();
-        if (!$body) {
-            return $this->createResponse(400, [], 'No upload data provided');
-        }
 
         $declaredLength = $cache->length;
 
@@ -334,7 +327,7 @@ class TusServer
 
         if ($ctx !== null) {
             $localChecksum = base64_encode(hash_final($ctx, true));
-            if ($localChecksum !== ($patchChecksum->value ?? null)) {
+            if ($localChecksum !== $patchChecksum->value) {
                 $this->backend->delete($fileName);
                 $this->backend->containerDelete($fileName);
 

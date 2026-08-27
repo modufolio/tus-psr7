@@ -27,7 +27,9 @@ abstract class TusTestCase extends TestCase
         parent::setUp();
 
         $this->vfsRoot = vfsStream::setup('root', null, ['uploads' => []]);
-        $this->vfsUploads = $this->vfsRoot->getChild('uploads');
+        $uploads = $this->vfsRoot->getChild('uploads');
+        self::assertInstanceOf(vfsStreamDirectory::class, $uploads);
+        $this->vfsUploads = $uploads;
         $this->vfsUploadDir = vfsStream::url('root/uploads/');
 
         $this->tmpDir = sys_get_temp_dir() . '/tus_tests_' . uniqid();
