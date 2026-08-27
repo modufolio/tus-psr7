@@ -11,8 +11,6 @@
   </testsuites>
   <php>
     <ini name="memory_limit" value="2048M"/>
-    <ini name="opcache.enable" value="0"/>
-    <ini name="opcache.enable_cli" value="0"/>
   </php>
   <source>
     <include>
