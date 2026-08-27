@@ -1,2 +1,20 @@
-# Auto detect text files and perform LF normalization
+# normalize line endings
 * text=auto
+
+# git
+.gitattributes export-ignore
+.github/ export-ignore
+.gitignore export-ignore
+
+# tests
+phpstan.php export-ignore
+phpunit.xml.dist export-ignore
+.php-cs-fixer.php export-ignore
+.phpunit.cache/ export-ignore
+tests/ export-ignore
+
+# other
+.idea/ export-ignore
+.vscode/ export-ignore
+.claude/ export-ignore
+.DS_Store export-ignore
