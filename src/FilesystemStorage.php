@@ -10,7 +10,6 @@ class FilesystemStorage implements StorageInterface
 {
     private string $containerSuffix = '.cachecontainer';
     private string $uploadDir;
-    private string $lockSuffix = '.lock';
     private int $tmpTtl = 86400; // seconds
 
     public function __construct(string $uploadDir, ?string $containerSuffix = null)
@@ -237,7 +236,7 @@ class FilesystemStorage implements StorageInterface
         }
 
         $destination = $destinationDirectory . $filename;
-        $this->lock($filePath, LOCK_SH, function ($fh) use ($filePath, $destination, $removeAfter, $filename) {
+        $this->lock($filePath, LOCK_SH, function ($fh) use ($filePath, $destination, $removeAfter) {
             if ($removeAfter) {
                 if (!@rename($filePath, $destination)) {
                     throw new TusException("Failed to move file to: {$destination}");
@@ -310,14 +309,17 @@ class FilesystemStorage implements StorageInterface
         }
 
         return (bool)$this->lock($filePath, LOCK_SH, function ($fh) use ($algorithm, $checksum, $filename) {
-            $ctx = @hash_init($algorithm);
-            if ($ctx === false) {
-                throw new TusException("Unsupported hash algorithm: {$algorithm}");
+            // hash_init() throws ValueError on an unknown algorithm since
+            // PHP 8; it no longer returns false.
+            try {
+                $ctx = hash_init($algorithm);
+            } catch (\ValueError $e) {
+                throw new TusException("Unsupported hash algorithm: {$algorithm}", 0, $e);
             }
             if (ftell($fh) !== 0) {
                 rewind($fh);
             }
-            if (@hash_update_stream($ctx, $fh) === false) {
+            if (@hash_update_stream($ctx, $fh) === 0 && !feof($fh)) {
                 throw new TusException("Failed to compute checksum for: {$filename}");
             }
 
@@ -358,7 +360,7 @@ class FilesystemStorage implements StorageInterface
     {
         return (string)$this->lock($path, LOCK_SH, function ($fh) {
             $stat = fstat($fh);
-            $size = $stat ? ($stat['size'] ?? 0) : 0;
+            $size = false === $stat ? 0 : $stat['size'];
             if ($size === 0) {
                 return '';
             }
